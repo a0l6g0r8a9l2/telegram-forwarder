@@ -1,0 +1,11 @@
+version: '3'
+
+services:
+  telegram-forwarder:
+    build: .
+    restart: always
+    env_file:
+      - .env
+    volumes:
+      - ./session:/app/session
+      - ./logs:/app/logs
