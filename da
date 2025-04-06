@@ -1,0 +1,17 @@
+[33mcommit a212a128f13dbd517cf4193859491e054ebd284f[m[33m ([m[1;36mHEAD[m[33m -> [m[1;32mmain[m[33m)[m
+Author: Aleksei Gruzdev <a0l6g0r8a9l2@gmail.com>
+Date:   Sun Apr 6 16:00:44 2025 +0200
+
+    update git ignore
+
+[33mcommit b28e85ce40049eadfb61b4b0423c89db034edd1b[m
+Author: Aleksei Gruzdev <a0l6g0r8a9l2@gmail.com>
+Date:   Sun Apr 6 15:58:39 2025 +0200
+
+    fixes
+
+[33mcommit 75ddffc5d8a484c6d6d9bef45c8d05d9647f80dc[m
+Author: Aleksei Gruzdev <a0l6g0r8a9l2@gmail.com>
+Date:   Sat Apr 5 16:49:49 2025 +0200
+
+    initial commit

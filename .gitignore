@@ -1,4 +1,7 @@
 .env
 .venv
 test.py
-tg-channels-short-list - crypto.json
+tg-channels-short-list.json
+session.session
+telegram_forwarder.log
+telegram_forwarder.session
