@@ -15,7 +15,6 @@ logging.basicConfig(
     level=logging.INFO,
     format='%(asctime)s - %(name)s - %(levelname)s - %(message)s',
     handlers=[
-        logging.FileHandler("telegram_forwarder.log"),
         logging.StreamHandler()
     ]
 )
@@ -38,12 +37,20 @@ REQUEST_RETRY_DELAY = int(os.getenv('REQUEST_RETRY_DELAY', 1))
 URL_PATTERN = re.compile(r'https?://\S+|www\.\S+')
 
 # Загрузить список телеграм чатов из json
-def load_tg_chats_shortlist(file: str = 'tg-channels-short-list - crypto.json') -> list[dict]:
+def load_tg_chats_shortlist(file_path: str = 'tg-channels-short-list.json') -> list[dict]:
     try:
-        shortlist = json.loads(file)
+        with open(file_path, encoding='utf-8') as file:
+            file_contents = file.read()
+        shortlist = json.loads(file_contents)
+        logger.info('Telegram chats short list uploaded successfuly')
+        return shortlist
     except Exception as e:
-        logger.error('Cant load tg chats shortlist')
-    return shortlist
+        logger.error(f'Cant load tg chats shortlist. Error: {str(e)}')
+
+# Идентификаторы каналов, сообщения по которым нужно обрабатывать
+chats_shortlist = load_tg_chats_shortlist()
+chats_shortlist_ids = [i.get('channel_id') for i in chats_shortlist]
+
 
 # Ограничитель запросов
 class RateLimiter:
@@ -179,12 +186,10 @@ async def main():
         await client.start(phone=PHONE_NUMBER)
         logger.info("Successfully connected to Telegram")
         
+
         # Обработчик новых сообщений
-        @client.on(events.NewMessage)
+        @client.on(events.NewMessage(incoming=True, chats = chats_shortlist_ids))
         async def handle_new_message(event):
-            # Идентификаторы каналов, сообщения по которым нуэно обрабатывать
-            chats_shortlist = load_tg_chats_shortlist()
-            chats_shortlist_ids = [i.get('channel_id') for i in chats_shortlist]
 
             try:
                 # Получение сообщения
@@ -193,50 +198,43 @@ async def main():
                 # Получение информации о чате
                 chat = await event.get_chat()
                 chat_id = event.chat_id
+                chat_title = getattr(chat, 'title', None) or f"Chat {chat_id}"
 
-                if chat_id in chats_shortlist_ids:
-                    chat_category = [c.get('category') for c in chats_shortlist if c.get('channel_id') == chat_id][0]
+                channel_category = [c.get('category') for c in chats_shortlist if c.get('channel_id') == chat_id][0]
 
-                    chat_title = getattr(chat, 'title', None) or f"Chat {chat_id}"
-                
-                    # Извлечение текста сообщения
-                    text = message.text if message.text else ""
+                # Извлечение текста сообщения
+                text = message.text if message.text else ""
 
-                    # Определение наличия медиа
-                    has_media = message.media is not None
-                    media_type = str(message.media.__class__.__name__) if has_media else None
+                # Определение наличия медиа
+                has_media = message.media is not None
+                media_type = str(message.media.__class__.__name__) if has_media else None
 
-                    # Извлечение URL из текста и создание объектов для них
-                    text_urls = URL_PATTERN.findall(text)
-                    url_objects = [{"type": "text_link", "url": url, "description": "URL from text"} for url in text_urls]
+                # Извлечение URL из текста и создание объектов для них
+                text_urls = URL_PATTERN.findall(text)
+                url_objects = [{"type": "text_link", "url": url, "description": "URL from text"} for url in text_urls]
 
-                    # Извлечение URL из медиаконтента
-                    media_url_objects = await extract_media_urls(message, client) if has_media else []
+                # Извлечение URL из медиаконтента
+                media_url_objects = await extract_media_urls(message, client) if has_media else []
+                # Объединение всех URL в один массив
+                all_urls = url_objects + media_url_objects
 
-                    # Объединение всех URL в один массив
-                    all_urls = url_objects + media_url_objects
+                # Формирование данных для отправки
+                data = {
+                    "channel_name": chat_title,
+                    "channel_id": chat_id,
+                    "channel_category": channel_category,
+                    "message_text": text,
+                    "urls": all_urls,
+                    "has_media": has_media,
+                    "media_type": media_type,
+                    "timestamp": datetime.now().isoformat()
+                }
 
-                    # Формирование данных для отправки
-                    data = {
-                        "channel_name": chat_title,
-                        "channel_id": chat_id,
-                        "chat_category": chat_category,
-                        "message_text": text,
-                        "urls": all_urls,
-                        "has_media": has_media,
-                        "media_type": media_type,
-                        "timestamp": datetime.now().isoformat()
-                    }
+                logger.info(f"New message from short list, chat_id: {chat_id}")
 
-                    logger.info(f"New message from {chat_title} (ID: {chat_id})")
+                # Отправка данных на webhook
+                await send_to_webhook(data, rate_limiter)
 
-                    # Отправка данных на webhook
-                    await send_to_webhook(data, rate_limiter)
-                else:
-                    logger.warning(f"Got message not from shortlist with id: {chat_id}")
-
-                
-                
             except Exception as e:
                 logger.error(f"Error processing message: {str(e)}")
         

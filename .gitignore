@@ -1,2 +1,4 @@
 .env
+.venv
+test.py
 tg-channels-short-list - crypto.json
