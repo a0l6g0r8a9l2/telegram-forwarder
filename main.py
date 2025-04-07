@@ -188,7 +188,7 @@ async def main():
         
 
         # Обработчик новых сообщений
-        @client.on(events.NewMessage(incoming=True, chats = chats_shortlist_ids))
+        @client.on(events.NewMessage(incoming=True, chats=chats_shortlist_ids))
         async def handle_new_message(event):
 
             try:
@@ -199,8 +199,11 @@ async def main():
                 chat = await event.get_chat()
                 chat_id = event.chat_id
                 chat_title = getattr(chat, 'title', None) or f"Chat {chat_id}"
-
-                channel_category = [c.get('category') for c in chats_shortlist if c.get('channel_id') == chat_id][0]
+                
+                try:
+                    channel_category = [c.get('category') for c in chats_shortlist if c.get('channel_id') == chat_id][0]
+                except IndexError:
+                    channel_category = 'Other'
 
                 # Извлечение текста сообщения
                 text = message.text if message.text else ""
@@ -246,7 +249,7 @@ async def main():
     except FloodWaitError as e:
         logger.error(f"Hit Telegram rate limit. Need to wait {e.seconds} seconds")
     except Exception as e:
-        logger.error(f"Unexpected error: {str(e)}")
+        logger.error(f"Unexpected error: {e}")
     finally:
         if client.is_connected():
             await client.disconnect()
