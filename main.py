@@ -6,6 +6,7 @@ import re
 from datetime import datetime
 import requests
 from telethon import TelegramClient, events
+from telethon.sessions import StringSession
 from telethon.errors import FloodWaitError, SessionPasswordNeededError
 from telethon.tl.types import MessageMediaPhoto, MessageMediaDocument, MessageMediaWebPage
 from dotenv import load_dotenv
@@ -29,12 +30,20 @@ API_HASH = os.getenv('API_HASH')
 PHONE_NUMBER = os.getenv('PHONE_NUMBER')
 WEBHOOK_URL = os.getenv('WEBHOOK_URL', 'https://alexgruzdev.space/webhook-test/cebe55e0-2ed8-4b21-ad31-f3cee4f7d43f')
 SESSION_NAME = os.getenv('SESSION_NAME', 'telegram_forwarder')
+SESSION_STRING = os.getenv('SESSION_STRING', '')
 MAX_REQUESTS_PER_MINUTE = int(os.getenv('MAX_REQUESTS_PER_MINUTE', 20))
 REQUEST_RETRY_COUNT = int(os.getenv('REQUEST_RETRY_COUNT', 2))
 REQUEST_RETRY_DELAY = int(os.getenv('REQUEST_RETRY_DELAY', 1))
 
 # Регулярное выражение для поиска URL в тексте
 URL_PATTERN = re.compile(r'https?://\S+|www\.\S+')
+
+# Получаем сессию из строки (если её не будет, нужно залогиниться)
+session = StringSession(SESSION_STRING)
+if not SESSION_STRING:
+    logger.info('Got empty session string fwom ENV! Authentification required...')
+else:
+    logger.info('Got session string from ENV')
 
 # Загрузить список телеграм чатов из json
 def load_tg_chats_shortlist(file_path: str = 'tg-channels-short-list.json') -> list[dict]:
@@ -176,7 +185,7 @@ async def main():
     logger.info("Starting Telegram Forwarder")
     
     # Создание клиента Telegram
-    client = TelegramClient(SESSION_NAME, API_ID, API_HASH)
+    client = TelegramClient(session, API_ID, API_HASH)
     
     # Создание ограничителя запросов
     rate_limiter = RateLimiter(MAX_REQUESTS_PER_MINUTE)
@@ -185,8 +194,11 @@ async def main():
         # Запуск клиента
         await client.start(phone=PHONE_NUMBER)
         logger.info("Successfully connected to Telegram")
-        
 
+        # Отображени сессии в виде строки (должно использоваться только при локальном запуске)
+        # session_string = client.session.save()
+        # print(f'Session string: {session_string}')
+        
         # Обработчик новых сообщений
         @client.on(events.NewMessage(incoming=True, chats=chats_shortlist_ids))
         async def handle_new_message(event):
@@ -249,7 +261,7 @@ async def main():
     except FloodWaitError as e:
         logger.error(f"Hit Telegram rate limit. Need to wait {e.seconds} seconds")
     except Exception as e:
-        logger.error(f"Unexpected error: {e}")
+        logger.error(f"Unexpected error: {str(e)}")
     finally:
         if client.is_connected():
             await client.disconnect()
